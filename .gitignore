@@ -7,3 +7,5 @@ __pycache__/
 dist/
 build/
 *.pth
+backend/model.pkl
+backend/vectorizer.pkl

@@ -1,6 +1,4 @@
-"""
-AIEngine — BERT + ResNet18 multimodal classifier (wrapped MLPredictor).
-"""
+"""AIEngine — TF-IDF + LogisticRegression sentiment classifier."""
 
 from __future__ import annotations
 
@@ -13,7 +11,7 @@ from .ml_explanation import build_ml_explanation
 
 
 class AIEngine:
-    """Thin orchestration layer over the PyTorch multimodal model."""
+    """Thin orchestration layer over the lightweight text classifier."""
 
     def __init__(self, predictor: Optional[MLPredictor] = None) -> None:
         self._predictor = predictor if predictor is not None else MLPredictor()
@@ -25,12 +23,13 @@ class AIEngine:
         *,
         explain: bool = False,
     ) -> AnalysisResult:
+        payload = self._predictor.predict_payload(text, image_bytes, include_saliency=explain)
+
         if explain:
-            payload = self._predictor.predict_with_explanation(text, image_bytes)
             sentiment = payload["label"]
             explanation = build_ml_explanation(text, payload)
         else:
-            sentiment = self._predictor.predict(text, image_bytes)
+            sentiment = payload["label"]
             explanation = None
 
         opinion = text.strip()
@@ -40,6 +39,10 @@ class AIEngine:
         aspect = Aspect(
             aspect="overall",
             opinion=opinion,
+            text_score=float(payload["fused_score"]),
+            image_score=0.0,
+            fused_score=float(payload["fused_score"]),
+            confidence=round(float(payload["confidence"]) * 100.0, 2),
             sentiment=sentiment,
         )
         return AnalysisResult(aspects=[aspect], explanation=explanation)

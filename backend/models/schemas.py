@@ -45,6 +45,13 @@ class Aspect(BaseModel):
         description="Weighted fusion of text and image sentiment",
     )
 
+    confidence: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=100.0,
+        description="Prediction confidence percentage",
+    )
+
     sentiment: Literal["Positive", "Negative", "Neutral"] = "Neutral"
 
     model_config = ConfigDict(validate_assignment=True)
@@ -96,6 +103,7 @@ class AnalysisResult(BaseModel):
                         "text_score": -0.7,
                         "image_score": -0.2,
                         "fused_score": -0.55,
+                        "confidence": 55.0,
                         "sentiment": "Negative",
                     }
                 ]

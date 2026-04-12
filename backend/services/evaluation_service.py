@@ -179,7 +179,7 @@ class EvaluationService:
             )
         if len(gold_for_ai) < 5:
             warnings.append(
-                "Very few AI predictions succeeded; verify multimodal_model.pth and torch stack.",
+                "Very few AI predictions succeeded; verify model.pkl/vectorizer.pkl and sklearn setup.",
             )
 
         if not gold_for_rule:

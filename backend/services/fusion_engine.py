@@ -1,5 +1,6 @@
 """
 FusionEngine — weighted fusion of text and image sentiment (rule-based).
+Uses same thresholds as compute_rule_sentiment for consistency.
 """
 
 from __future__ import annotations
@@ -14,14 +15,16 @@ class FusionEngine:
     """
     fused_score = TEXT_WEIGHT * text_score + IMAGE_WEIGHT * image_score
 
-    Classification: > POS_THRESHOLD → Positive; < NEG_THRESHOLD → Negative; else Neutral.
+    Classification: >= POS_THRESHOLD → Positive; <= NEG_THRESHOLD → Negative; else Neutral.
+    Same thresholds as compute_rule_sentiment for consistency.
     """
 
     TEXT_WEIGHT: float = 0.7
     IMAGE_WEIGHT: float = 0.3
 
-    POS_THRESHOLD: float = 0.2
-    NEG_THRESHOLD: float = -0.2
+    # Same thresholds as compute_rule_sentiment for consistency
+    POS_THRESHOLD: float = 0.05
+    NEG_THRESHOLD: float = -0.05
 
     def fuse(self, aspect: Aspect, image_score: float) -> Aspect:
         image_score = float(np.clip(image_score, -1.0, 1.0))
@@ -44,8 +47,9 @@ class FusionEngine:
         return self._classify(score)
 
     def _classify(self, score: float) -> str:
-        if score > self.POS_THRESHOLD:
+        """Same classification logic as compute_rule_sentiment."""
+        if score >= self.POS_THRESHOLD:
             return "Positive"
-        if score < self.NEG_THRESHOLD:
+        if score <= self.NEG_THRESHOLD:
             return "Negative"
         return "Neutral"

@@ -22,8 +22,8 @@ def build_ml_explanation(text: str, explain_payload: Dict[str, Any]) -> Analysis
     sal = [WordSaliency(word=s["word"], delta=s["delta"]) for s in sal_raw]
 
     summary = (
-        f"Classifier predicted {label} with softmax confidence {conf:.1%}. "
-        f"Occlusion saliency ranks words whose removal drops support for that class (higher |Δ| = stronger support). "
+        f"Classifier predicted {label} with confidence {conf:.1%}. "
+        f"Saliency ranks TF-IDF terms with strongest linear contribution to the predicted class (higher |Δ| = stronger impact). "
         f"VADER lexicon coloring is an independent dictionary signal; whole-review compound: {compound:+.3f}."
     )
 
@@ -35,7 +35,7 @@ def build_ml_explanation(text: str, explain_payload: Dict[str, Any]) -> Analysis
         image_note=None,
         class_probabilities=probs,
         confidence=round(conf, 6),
-        confidence_note="Softmax probability of the argmax class (not a calibrated uncertainty estimate).",
+        confidence_note="Predicted-class probability from LogisticRegression (not a calibrated uncertainty estimate).",
         top_word_saliency=sal,
-        fusion_note="Text (BERT [CLS]) and image (ResNet) embeddings are concatenated before a small MLP + linear head.",
+        fusion_note="Text-only TF-IDF features are fed to a LogisticRegression classifier.",
     )
