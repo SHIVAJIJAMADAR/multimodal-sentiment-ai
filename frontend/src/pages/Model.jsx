@@ -25,7 +25,7 @@ function ModelOverviewCard({ title, subtitle, icon, description, gradient, delay
 
 const containerVariants = {
   hidden: { opacity: 0 },
-  visible: { transition: { staggerChildren: 0.1 } }
+  visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
 };
 
 const itemVariants = {
