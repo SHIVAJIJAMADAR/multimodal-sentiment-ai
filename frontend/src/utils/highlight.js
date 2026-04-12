@@ -10,6 +10,63 @@ export function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Parse API response to extract sentiment and confidence.
+ * SINGLE SOURCE OF TRUTH for parsing API responses.
+ * 
+ * @param {Object} result - API response from /api/analyze or /api/analyze-ml
+ * @returns {{ sentiment: string, confidence: number, fusedScore: number, textScore: number }}
+ */
+export function parseAnalysisResponse(result) {
+  // Debug log
+  console.log("API RESPONSE:", result);
+
+  // Safe defaults
+  const fallback = {
+    sentiment: "Neutral",
+    confidence: 0,
+    fusedScore: 0,
+    textScore: 0,
+  };
+
+  // Check for valid response
+  if (!result || !result.aspects || !Array.isArray(result.aspects) || result.aspects.length === 0) {
+    console.log("API RESPONSE: No aspects found, using fallback");
+    return fallback;
+  }
+
+  // Get first aspect (our main result)
+  const aspect = result.aspects[0];
+
+  if (!aspect) {
+    console.log("API RESPONSE: First aspect missing, using fallback");
+    return fallback;
+  }
+
+  // Extract sentiment from aspect
+  const sentiment = aspect.sentiment || "Neutral";
+
+  // Extract fused score (final combined score)
+  const fusedScore = typeof aspect.fused_score === "number" ? aspect.fused_score : 0;
+
+  // Extract text score (VADER compound)
+  const textScore = typeof aspect.text_score === "number" ? aspect.text_score : 0;
+
+  // Use backend confidence when provided; fallback to fused score
+  const confidence = aspect.confidence ?? (Math.abs(fusedScore) * 100);
+
+  const parsed = {
+    sentiment,
+    confidence,
+    fusedScore,
+    textScore,
+  };
+
+  console.log("API RESPONSE PARSED:", parsed);
+
+  return parsed;
+}
+
 /** Render server-provided VADER lexicon segments (positive / negative / neutral). */
 export function segmentsToHtml(segments) {
   if (!segments?.length) return "";

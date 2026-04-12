@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { analyzeRule, analyzeML, analyzeBoth, getHealth } from "../services/api.js";
+import { analyzeRule, analyzeML, analyzeBoth, extractTextFromImage, getHealth } from "../services/api.js";
+import { parseAnalysisResponse } from "../utils/highlight.js";
 
 export function useAnalysis({ onAnalysisComplete } = {}) {
   const [text, setText] = useState("");
@@ -9,23 +10,37 @@ export function useAnalysis({ onAnalysisComplete } = {}) {
   const [results, setResults] = useState(null);
   const [resultsML, setResultsML] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrMessage, setOcrMessage] = useState(null);
   const [error, setError] = useState(null);
   const [health, setHealth] = useState(null);
 
   const previewRef = useRef(null);
   previewRef.current = imagePreview;
+  const onAnalysisCompleteRef = useRef(onAnalysisComplete);
+  onAnalysisCompleteRef.current = onAnalysisComplete;
+  const isAnalyzing = useRef(false);
 
   useEffect(() => {
     let mounted = true;
-    getHealth()
-      .then((h) => {
-        if (mounted) setHealth(h);
-      })
-      .catch(() => {
-        if (mounted) setHealth(false);
-      });
+    let retryTimeout;
+    
+    const checkHealth = () => {
+      getHealth()
+        .then((h) => {
+          if (mounted) setHealth(h);
+        })
+        .catch(() => {
+          if (mounted) setHealth(false);
+        });
+    };
+    
+    checkHealth();
+    retryTimeout = setInterval(checkHealth, 30000);
+    
     return () => {
       mounted = false;
+      clearInterval(retryTimeout);
     };
   }, []);
 
@@ -39,22 +54,48 @@ export function useAnalysis({ onAnalysisComplete } = {}) {
     setModel(m);
   }, []);
 
-  const handleImageChange = useCallback((e) => {
+  const handleImageChange = useCallback(async (e) => {
     const file = e.target.files?.[0] || null;
     setImage(file);
     setImagePreview((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return file ? URL.createObjectURL(file) : null;
     });
+
+    if (!file) {
+      setOcrMessage(null);
+      return;
+    }
+
+    setOcrLoading(true);
+    setOcrMessage("Extracting text from image...");
+    try {
+      const extractedText = await extractTextFromImage(file);
+      if (extractedText) {
+        setText(extractedText);
+        setError(null);
+        setOcrMessage("Text extracted from image");
+      } else {
+        setOcrMessage("Could not extract text, please type manually");
+      }
+    } catch (_err) {
+      setOcrMessage("Could not extract text, please type manually");
+    } finally {
+      setOcrLoading(false);
+    }
   }, []);
 
   const handleAnalyze = useCallback(
     async (submittedText, opts = {}) => {
+      if (isAnalyzing.current) return false;
+      
       const explain = opts.explain !== false;
       if (!submittedText?.trim()) {
         setError("Please enter a review.");
         return false;
       }
+      
+      isAnalyzing.current = true;
       setText(submittedText);
       setError(null);
       setLoading(true);
@@ -80,27 +121,28 @@ export function useAnalysis({ onAnalysisComplete } = {}) {
         }
 
         const primary = model === "compare" ? mlData || ruleData : model === "ml" ? mlData : ruleData;
-        const sentiment = primary?.aspects?.[0]?.sentiment || "Neutral";
-        const confidence = primary?.aspects?.[0]?.text_score;
+        const parsed = parseAnalysisResponse(primary);
         
-        onAnalysisComplete?.({
+        onAnalysisCompleteRef.current?.({
           text: submittedText,
-          sentiment,
-          confidence,
+          sentiment: parsed.sentiment,
+          confidence: parsed.confidence,
           timestamp: Date.now()
         });
 
         return true;
       } catch (err) {
-        setError(err.message || "Failed to analyze review.");
+        const errorMsg = err.message || "Failed to analyze review.";
+        setError(errorMsg);
         setResults(null);
         setResultsML(null);
         return false;
       } finally {
         setLoading(false);
+        isAnalyzing.current = false;
       }
     },
-    [image, model, onAnalysisComplete],
+    [image, model],
   );
 
   const clearResults = useCallback(() => {
@@ -120,6 +162,8 @@ export function useAnalysis({ onAnalysisComplete } = {}) {
     results,
     resultsML,
     loading,
+    ocrLoading,
+    ocrMessage,
     error,
     health,
     handleModelChange,

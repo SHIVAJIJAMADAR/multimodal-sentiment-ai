@@ -29,11 +29,16 @@ export function ToastProvider({ children }) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  const dismissAll = useCallback(() => {
+    setToasts([]);
+  }, []);
+
   const toast = {
-    success: (msg, duration) => addToast(msg, "success", duration),
-    error: (msg, duration) => addToast(msg, "error", duration),
-    info: (msg, duration) => addToast(msg, "info", duration),
-    warning: (msg, duration) => addToast(msg, "warning", duration),
+    success: (msg, options = {}) => addToast(msg, "success", options?.duration ?? 4000),
+    error: (msg, options = {}) => addToast(msg, "error", options?.duration ?? 5000),
+    info: (msg, options = {}) => addToast(msg, "info", options?.duration ?? 4000),
+    warning: (msg, options = {}) => addToast(msg, "warning", options?.duration ?? 4000),
+    dismissAll,
   };
 
   return (

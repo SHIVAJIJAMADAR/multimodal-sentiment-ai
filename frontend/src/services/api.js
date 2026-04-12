@@ -1,6 +1,7 @@
-import { getApiBase, request } from "./httpClient.js";
+import { BASE_URL, request } from "./httpClient.js";
+import { parseAnalysisResponse } from "../utils/highlight.js";
 
-const API_BASE = getApiBase();
+const API_BASE = BASE_URL;
 
 export async function analyzeRule(text, imageFile = null, { explain = true } = {}) {
   if (!text || !text.trim()) throw new Error("Review text cannot be empty.");
@@ -61,6 +62,19 @@ export async function analyzeBoth({ text, imageFile = null, explain = true }) {
   return { rule, ml };
 }
 
+export async function extractTextFromImage(imageFile) {
+  if (!imageFile) throw new Error("Image file is required.");
+  if (!imageFile.type?.startsWith("image/")) {
+    throw new Error("Please upload a valid image file.");
+  }
+
+  const formData = new FormData();
+  formData.append("image", imageFile);
+
+  const res = await request(`${API_BASE}/api/extract-text`, { method: "POST", body: formData }, 20000);
+  return (res?.extracted_text || "").trim();
+}
+
 export async function analyzeBatch({ lines = [], model = "rule" }) {
   const results = [];
   for (const line of lines) {
@@ -68,9 +82,9 @@ export async function analyzeBatch({ lines = [], model = "rule" }) {
     if (!t) continue;
     try {
       const res = model === "ml" ? await analyzeML(t) : await analyzeRule(t);
-      const aspect = res?.aspects?.[0];
-      const sentiment = aspect?.sentiment || "Neutral";
-      const confidence = aspect?.text_score ?? 0;
+      const parsed = parseAnalysisResponse(res);
+      const sentiment = parsed.sentiment;
+      const confidence = parsed.confidence;
       results.push({ text: t, result: res, sentiment, confidence });
     } catch (e) {
       results.push({ text: t, error: e?.message || "error", sentiment: "Error", confidence: 0 });
@@ -90,11 +104,25 @@ export async function getMetrics(refresh = false) {
 }
 
 export async function getHealth() {
+  const url = `${API_BASE}/openapi.json`;
+  console.log("Calling:", url);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+
   try {
-    const res = await request(`${API_BASE}/health`, {}, 5000);
-    return res;
-  } catch (e) {
+    const response = await fetch(url, { method: "GET", signal: controller.signal });
+
+    // 404 can mean wrong probe path while backend is still reachable.
+    if (response.ok || response.status === 404) {
+      return { online: true, status: response.status };
+    }
+
     return null;
+  } catch (e) {
+    // Mark offline only for network/timeout/fetch failures.
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

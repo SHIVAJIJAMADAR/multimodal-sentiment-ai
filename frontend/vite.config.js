@@ -8,11 +8,11 @@ export default defineConfig({
     port: 3000,
     open: true,
 
-    // Proxy API requests to FastAPI backend
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
-        changeOrigin: true
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+        rewrite: (path) => path
       }
     }
   }

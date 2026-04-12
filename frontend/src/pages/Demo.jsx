@@ -1,10 +1,9 @@
-import React, { useMemo, useState, useCallback, useEffect } from "react";
+import React, { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import ReviewInput from "../components/ReviewInput.jsx";
 import AnalyticsPanel from "../components/AnalyticsPanel.jsx";
 import HistoryPanel from "../components/HistoryPanel.jsx";
 import PredictionPanel from "../components/PredictionPanel.jsx";
-import DatasetTester from "../components/DatasetTester.jsx";
 import LiveReviewFeed from "../components/LiveReviewFeed.jsx";
 import SentimentTimeline from "../components/SentimentTimeline.jsx";
 import ModelPerformancePanel from "../components/ModelPerformancePanel.jsx";
@@ -31,17 +30,13 @@ export default function Demo() {
   const [history, setHistory] = useState([]);
   const [explainTab, setExplainTab] = useState("rule");
   const toast = useToast();
+  const errorShownRef = useRef(false);
+  const healthToastShownRef = useRef(false);
+  const ocrToastRef = useRef(null);
 
-  const onAnalysisComplete = useCallback(({ text, sentiment, confidence }) => {
-    setHistory((prev) => {
-      const newHistory = [{ text, sentiment, confidence, ts: Date.now() }, ...prev];
-      return newHistory.slice(0, config.ui.maxHistoryItems);
-    });
+  const onAnalysisComplete = useCallback(({ sentiment }) => {
+    errorShownRef.current = false;
     toast.success(`Analysis complete: ${sentiment}`);
-  }, [toast]);
-
-  const onAnalysisError = useCallback((error) => {
-    toast.error(error || "Analysis failed");
   }, [toast]);
 
   const {
@@ -52,6 +47,8 @@ export default function Demo() {
     results,
     resultsML,
     loading,
+    ocrLoading,
+    ocrMessage,
     error,
     health,
     handleModelChange,
@@ -60,10 +57,30 @@ export default function Demo() {
   } = useAnalysis({ onAnalysisComplete });
 
   useEffect(() => {
-    if (error) {
-      onAnalysisError(error);
+    if (error && !errorShownRef.current) {
+      errorShownRef.current = true;
+      toast.dismissAll();
+      toast.error(error);
     }
-  }, [error, onAnalysisError]);
+    if (!error) {
+      errorShownRef.current = false;
+    }
+  }, [error, toast]);
+
+  useEffect(() => {
+    if (health && !healthToastShownRef.current) {
+      healthToastShownRef.current = true;
+      toast.success("Backend connected", { duration: 2500 });
+    }
+  }, [health, toast]);
+
+  useEffect(() => {
+    if (!ocrMessage || ocrMessage === ocrToastRef.current) return;
+    if (ocrMessage === "Text extracted from image") {
+      toast.success("OCR success", { duration: 2200 });
+    }
+    ocrToastRef.current = ocrMessage;
+  }, [ocrMessage, toast]);
 
   useEffect(() => {
     setExplainTab("rule");
@@ -111,17 +128,21 @@ export default function Demo() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
-          className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700"
+          className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-full border ${
+            health 
+              ? "bg-emerald-500/10 border-emerald-500/30" 
+              : "bg-rose-500/10 border-rose-500/30"
+          }`}
         >
-          <span className={`w-2 h-2 rounded-full ${health ? "bg-emerald-400" : "bg-rose-400"} ${health ? "animate-pulse" : ""}`} />
-          <span className={health ? "text-emerald-400" : "text-rose-400"}>
+          <span className={`w-2 h-2 rounded-full ${health ? "bg-emerald-400 animate-pulse" : "bg-rose-400"}`} />
+          <span className={health ? "text-emerald-400" : "text-rose-400 font-medium"}>
             Backend {health ? "Online" : "Offline"}
           </span>
         </motion.div>
       </motion.div>
 
-      <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <motion.div variants={itemVariants} className="space-y-6">
+      <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <motion.div variants={itemVariants} className="lg:col-span-2 space-y-6">
           <div className="card">
             <ReviewInput
               value={text}
@@ -133,6 +154,8 @@ export default function Demo() {
               model={model}
               onImageChange={handleImageChange}
               imagePreview={imagePreview}
+              ocrLoading={ocrLoading}
+              ocrMessage={ocrMessage}
             />
           </div>
           {imagePreview && (
@@ -145,8 +168,8 @@ export default function Demo() {
             </motion.div>
           )}
         </motion.div>
-        <motion.div variants={itemVariants}>
-          <div className="card">
+        <motion.div variants={itemVariants} className="lg:col-span-3">
+          <div className="card h-full">
             <PredictionPanel
               ruleResult={results}
               mlResult={resultsML}

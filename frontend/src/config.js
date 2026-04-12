@@ -1,6 +1,6 @@
 export const config = {
   api: {
-    baseUrl: import.meta.env.VITE_API_BASE || "http://localhost:8000",
+    baseUrl: import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000",
     timeout: parseInt(import.meta.env.VITE_API_TIMEOUT || "15000", 10),
   },
   features: {

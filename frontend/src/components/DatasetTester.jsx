@@ -51,7 +51,7 @@ export default function DatasetTester({ model = "rule" }) {
     const csvRows = rows.map((r) => ({
       Review: r.text,
       Sentiment: r.sentiment,
-      Confidence: r.confidence?.toFixed(3) || "N/A"
+      Confidence: r.confidence != null ? `${r.confidence.toFixed(2)}%` : "N/A"
     }));
     exportCSV("batch_results.csv", csvRows);
   }
@@ -169,7 +169,7 @@ export default function DatasetTester({ model = "rule" }) {
         <div className="rounded-xl border border-slate-700/50 bg-slate-900/30 overflow-hidden">
           <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
             <div className="text-sm font-medium text-white">Results ({rows.length})</div>
-            <div className="text-xs text-slate-400">Avg. Confidence: {avgConfidence}</div>
+            <div className="text-xs text-slate-400">Avg. Confidence: {avgConfidence}%</div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -194,7 +194,7 @@ export default function DatasetTester({ model = "rule" }) {
                       <td className="px-4 py-3 text-right">
                         {r.confidence !== undefined && r.confidence !== 0 ? (
                           <span className={`font-medium ${config.text}`}>
-                            {r.confidence > 0 ? "+" : ""}{r.confidence.toFixed(2)}
+                            {r.confidence.toFixed(1)}%
                           </span>
                         ) : (
                           <span className="text-slate-500">—</span>

@@ -3,6 +3,8 @@
  * Pure functions — safe for unit tests and reuse across panels / exports.
  */
 
+import { parseAnalysisResponse } from "./highlight.js";
+
 const ORDER = ["Positive", "Neutral", "Negative"];
 
 /**
@@ -40,7 +42,8 @@ export function dominantSentimentFromAspects(aspects) {
  */
 export function extractRuleSnapshot(result) {
   const aspects = result?.aspects ?? [];
-  const label = dominantSentimentFromAspects(aspects);
+  const parsed = parseAnalysisResponse(result);
+  const label = parsed.sentiment;
   const fused = aspects
     .map((a) => (typeof a.fused_score === "number" ? a.fused_score : null))
     .filter((v) => v != null);
@@ -67,12 +70,12 @@ export function extractRuleSnapshot(result) {
  * @param {object|null|undefined} result
  */
 export function extractMlSnapshot(result) {
-  const aspect = result?.aspects?.[0];
-  const label = aspect?.sentiment ?? "Neutral";
+  const parsed = parseAnalysisResponse(result);
+  const label = parsed.sentiment;
   const exp = result?.explanation;
   return {
     label,
-    confidence: typeof exp?.confidence === "number" ? exp.confidence : null,
+    confidence: parsed.confidence / 100,
     probabilities: exp?.class_probabilities ?? null,
     topSaliency: exp?.top_word_saliency?.slice(0, 5) ?? [],
   };

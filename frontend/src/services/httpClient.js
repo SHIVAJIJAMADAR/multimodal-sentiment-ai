@@ -1,7 +1,9 @@
 import config from "../config.js";
 
+export const BASE_URL = "http://127.0.0.1:8000";
+
 export function getApiBase() {
-  return config.api.baseUrl;
+  return BASE_URL;
 }
 
 export class ApiError extends Error {
@@ -19,6 +21,7 @@ export async function request(url, options = {}, timeout = null) {
   const id = setTimeout(() => controller.abort(), ms);
 
   try {
+    console.log("Calling:", url);
     const response = await fetch(url, { ...options, signal: controller.signal });
 
     if (!response.ok) {
@@ -35,7 +38,7 @@ export async function request(url, options = {}, timeout = null) {
         400: "Invalid request",
         401: "Unauthorized",
         403: "Access forbidden",
-        404: "Resource not found",
+        404: "Endpoint not found",
         422: "Validation error",
         429: "Too many requests",
         500: "Server error",
@@ -55,7 +58,7 @@ export async function request(url, options = {}, timeout = null) {
     if (err.name === "AbortError") {
       throw new ApiError("Request timed out. Please try again.", 408, "TIMEOUT");
     }
-    if (err.message?.includes("Failed to fetch") || err.message?.includes("NetworkError")) {
+    if (err.message?.includes("Failed to fetch") || err.message?.includes("NetworkError") || err.message?.includes("network")) {
       throw new ApiError("Backend connection failed. Is the server running?", 0, "CONNECTION_ERROR");
     }
     if (err instanceof ApiError) throw err;

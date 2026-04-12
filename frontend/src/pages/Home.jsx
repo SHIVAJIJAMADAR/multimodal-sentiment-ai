@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 
@@ -15,14 +15,22 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] } }
 };
 
+function DotsBackground() {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="absolute inset-0 dots-bg opacity-50" />
+      <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-cyan-500/10 rounded-full blur-[150px] animate-pulse" />
+      <div className="absolute top-1/3 right-1/4 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: "1s" }} />
+      <div className="absolute bottom-1/4 left-1/3 w-[700px] h-[700px] bg-purple-500/8 rounded-full blur-[180px] animate-pulse" style={{ animationDelay: "2s" }} />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-radial from-cyan-500/5 to-transparent rounded-full" />
+    </div>
+  );
+}
+
 export default function Home() {
   return (
     <div className="relative">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-cyan-500/5 rounded-full blur-[120px]" />
-        <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-blue-500/5 rounded-full blur-[100px]" />
-        <div className="absolute bottom-1/4 left-1/3 w-[600px] h-[600px] bg-purple-500/5 rounded-full blur-[150px]" />
-      </div>
+      <DotsBackground />
 
       <div className="container-centered relative z-10">
         {/* Hero Section */}
@@ -47,9 +55,7 @@ export default function Home() {
                 Multimodal Sentiment
               </span>
               <br />
-              <span className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-slate-200">
-                Analysis Made Simple
-              </span>
+              <TypewriterText />
             </h1>
           </motion.div>
 
@@ -60,10 +66,10 @@ export default function Home() {
           <motion.div variants={itemVariants} className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               to="/demo"
-              className="group relative inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-8 py-4 font-semibold text-lg shadow-xl shadow-cyan-500/20 hover:shadow-cyan-500/40 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+              className="group relative inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 text-white px-8 py-4 font-semibold text-lg shadow-xl shadow-cyan-500/20 hover:shadow-cyan-500/40 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] hover:animate-gradient ripple-btn"
             >
               <span className="flex items-center gap-2">
-                Try Demo Free
+                Try Demo
                 <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                 </svg>
@@ -71,9 +77,9 @@ export default function Home() {
             </Link>
             <Link
               to="/features"
-              className="inline-flex items-center justify-center rounded-xl px-8 py-4 font-semibold text-lg ring-1 ring-slate-700 text-slate-300 hover:bg-slate-800/50 hover:text-white hover:ring-slate-600 transition-all duration-300"
+              className="inline-flex items-center justify-center rounded-xl px-8 py-4 font-semibold text-lg ring-1 ring-slate-700 text-slate-300 hover:bg-slate-800/50 hover:text-white hover:ring-slate-600 transition-all duration-300 ripple-btn"
             >
-              See Features
+              View Features
             </Link>
           </motion.div>
 
@@ -82,19 +88,19 @@ export default function Home() {
               <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              <span>spaCy NLP</span>
+              <span>Real-time</span>
             </div>
             <div className="flex items-center gap-2">
               <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              <span>VADER Sentiment</span>
+              <span>AI-powered</span>
             </div>
             <div className="flex items-center gap-2">
               <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              <span>OpenCV Vision</span>
+              <span>No setup</span>
             </div>
           </motion.div>
         </motion.section>
@@ -194,7 +200,13 @@ export default function Home() {
                 className="relative text-center"
               >
                 {index < steps.length - 1 && (
-                  <div className="hidden lg:block absolute top-8 left-[60%] w-[80%] h-px bg-gradient-to-r from-cyan-500/40 to-transparent" />
+                  <motion.div
+                    initial={{ scaleX: 0 }}
+                    whileInView={{ scaleX: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.8, delay: index * 0.1 }}
+                    className="hidden lg:block absolute top-8 left-[60%] w-[80%] h-px origin-left bg-gradient-to-r from-cyan-500/40 to-transparent"
+                  />
                 )}
                 <div className="relative z-10">
                   <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-xl font-bold text-white mx-auto mb-6 shadow-lg shadow-cyan-500/20">
@@ -334,6 +346,28 @@ export default function Home() {
         </section>
       </div>
     </div>
+  );
+}
+
+function TypewriterText() {
+  const phrase = "Analyze Reviews with AI + Vision";
+  const [typed, setTyped] = useState("");
+
+  useEffect(() => {
+    let i = 0;
+    const timer = setInterval(() => {
+      i += 1;
+      setTyped(phrase.slice(0, i));
+      if (i >= phrase.length) clearInterval(timer);
+    }, 45);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <span className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-slate-200">
+      {typed}
+      <span className="ml-1 inline-block h-[0.9em] w-[2px] bg-cyan-400 align-[-0.05em] animate-pulse" />
+    </span>
   );
 }
 
