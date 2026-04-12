@@ -1,4 +1,4 @@
-﻿import os
+import os
 import pickle
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -44,19 +44,24 @@ class MLPredictor:
         self,
         model_path: Optional[str] = None,
         vectorizer_path: Optional[str] = None,
-        retrain: bool = True,
+        retrain: bool = False,
     ) -> None:
         base_dir = os.path.dirname(__file__)
         self.model_path = model_path or os.path.join(base_dir, "model.pkl")
         self.vectorizer_path = vectorizer_path or os.path.join(base_dir, "vectorizer.pkl")
 
-        if retrain or not self._artifacts_exist():
+        if retrain:
             self._train_and_save()
-        else:
+            return
+
+        if self._artifacts_exist():
             try:
                 self._load_artifacts()
+                return
             except Exception:
-                self._train_and_save()
+                pass
+
+        self._train_and_save()
 
     def _artifacts_exist(self) -> bool:
         return os.path.exists(self.model_path) and os.path.exists(self.vectorizer_path)
