@@ -1,83 +1,152 @@
-<<<<<<< HEAD
-# LiveLib — Dynamic Multimodal Seating Intelligence (MABSA)
+# LiveLib - Multimodal Sentiment Analysis
 
-A lightweight **Multimodal Aspect-Based Sentiment Analysis (MABSA)** system that analyzes **text reviews and images together** to determine aspect-level sentiment.
+LiveLib is a full-stack multimodal sentiment analysis project that combines:
+- a deterministic **rule-based pipeline** (spaCy + VADER + OpenCV heuristics), and
+- a lightweight **ML pipeline** (TF-IDF + Logistic Regression),
 
-The system extracts aspects from text, evaluates image mood using computer vision heuristics, and fuses both signals using a deterministic scoring model.
+with a modern React dashboard for single-mode prediction, side-by-side comparison, explainability, and OCR-assisted input.
 
-⚡ **Runs entirely on CPU. No deep learning frameworks required.**
+## Why this project
 
----
+- **Explainable:** every prediction returns interpretable fields (scores, labels, confidence, explanation metadata).
+- **Practical:** CPU-friendly, no heavy GPU requirement for inference.
+- **Production-ready:** split frontend/backend deployment (Vercel + Render), health checks, safe parsing, and fallback handling.
 
-# Features
+## Key Features
 
-• Aspect extraction using **spaCy dependency parsing**  
-• Sentiment scoring with **NLTK VADER**  
-• Image mood detection using **OpenCV HSV heuristics**  
-• Deterministic multimodal fusion (no neural networks)  
-• FastAPI backend with automatic API docs  
-• React + Vite interactive dashboard  
+- Rule-based multimodal sentiment (`/api/analyze`)
+- ML-based sentiment (`/api/analyze-ml`)
+- OCR text extraction from uploaded images (`/api/extract-text`)
+- Compare mode (Rule vs ML) in frontend
+- Confidence bars, disagreement diagnostics, and explainability panel
+- Robust frontend parser with safe fallback values
 
----
+## Tech Stack
 
-# Tech Stack
+### Backend
+- FastAPI
+- spaCy
+- NLTK VADER
+- OpenCV
+- scikit-learn
+- pytesseract + Pillow
 
-| Layer | Technology |
-|------|------------|
-Backend | FastAPI |
-NLP | spaCy |
-Sentiment | NLTK VADER |
-Vision | OpenCV |
-Numerics | NumPy |
-Frontend | React 18 + Vite |
+### Frontend
+- React + Vite
+- Tailwind CSS
+- Framer Motion
 
----
+## Project Structure
 
-# Architecture
-
+```text
+.
+|- backend/
+|  |- main.py                  # FastAPI app + middleware + routers
+|  |- routes/
+|  |  |- analysis.py           # /api/analyze, /api/analyze-ml, /api/extract-text
+|  |  |- health.py             # /health
+|  |- services/
+|  |  |- rule_engine.py        # Rule pipeline orchestration
+|  |  |- ai_engine.py          # ML pipeline orchestration
+|  |- models/
+|  |  |- schemas.py            # Pydantic response models
+|  |- ml_predictor.py          # TF-IDF + LogisticRegression inference
+|  |- requirements.txt
+|  |- Dockerfile               # Render docker deployment (includes tesseract)
+|
+|- frontend/
+|  |- src/
+|  |  |- pages/                # Home, Demo, Features, Model, About
+|  |  |- components/           # Input, prediction, explainability, analytics UI
+|  |  |- hooks/useAnalysis.js  # Main frontend state + API orchestration
+|  |  |- services/api.js       # API client
+|  |- vite.config.js
+|
+|- render.yaml                 # Render blueprint config
 ```
-backend/
-    main.py            # FastAPI server (POST /api/analyze)
-    engine.py          # MABSAEngine — pipeline orchestrator
-    linguistic.py      # LinguisticAnalyzer — spaCy dep parsing + VADER
-    vision.py          # VisualAnalyzer — OpenCV HSV heuristics
-    fusion.py          # DecisionFusionEngine — weighted score fusion
-    models.py          # Pydantic data models
-    requirements.txt   # Python dependencies
 
-frontend/
-    src/
-        App.jsx        # Main React component
-        api.js         # HTTP client for /api/analyze
-        main.jsx       # React entry point
-    index.html         # HTML shell
-    package.json       # npm dependencies
-    vite.config.js     # Vite dev server config
+## API Endpoints
+
+### 1) Rule pipeline
+`POST /api/analyze`
+
+Accepts:
+- JSON: `{ "text": "...", "explain": true }`
+- or multipart form-data with `text` and optional `image`
+
+### 2) ML pipeline
+`POST /api/analyze-ml`
+
+Accepts:
+- JSON: `{ "text": "...", "explain": true }`
+- or multipart form-data with `text` and optional `image`
+
+### 3) OCR
+`POST /api/extract-text`
+
+Multipart form-data:
+- `image` (jpeg/png/webp)
+
+Response:
+
+```json
+{
+  "extracted_text": "Camera is good but battery is not good"
+}
 ```
 
----
+### 4) Health
+`GET /health`
 
-# Quick Start
+Response:
 
-## Backend
+```json
+{ "status": "ok" }
+```
+
+## Example Analysis Response
+
+```json
+{
+  "aspects": [
+    {
+      "aspect": "overall",
+      "opinion": "document",
+      "text_score": 0.123,
+      "image_score": 0.0,
+      "fused_score": 0.123,
+      "confidence": 61.2,
+      "sentiment": "Positive"
+    }
+  ],
+  "explanation": {
+    "pipeline": "rule",
+    "document_vader_compound": 0.123
+  }
+}
+```
+
+## Local Setup
+
+## 1) Backend
+
+From project root:
 
 ```powershell
 python -m venv venv
 venv\Scripts\Activate.ps1
-
 pip install -r backend\requirements.txt
-
 python -m spacy download en_core_web_sm
 python -c "import nltk; nltk.download('vader_lexicon')"
-
 cd backend
 uvicorn main:app --reload --port 8000
 ```
 
-API available at `http://localhost:8000`.  
-Interactive docs at `http://localhost:8000/docs`.
+Backend runs on `http://127.0.0.1:8000`.
 
-## Frontend
+## 2) Frontend
+
+In a new terminal:
 
 ```powershell
 cd frontend
@@ -85,46 +154,25 @@ npm install
 npm run dev
 ```
 
-Opens at `http://localhost:3000`.
+Frontend runs on `http://localhost:3000`.
 
----
+## Deployment
 
-# API
+### Frontend (Vercel)
+- Deploy `frontend` app.
+- Set environment variable:
+  - `VITE_API_BASE=https://<your-backend-domain>`
 
-## POST /api/analyze
+### Backend (Render)
+- Uses `render.yaml` + `backend/Dockerfile`.
+- Docker image installs Tesseract + Python deps and starts FastAPI with uvicorn.
 
-**Form data:**
-- `text` (string, required) — review text
-- `image` (file, optional) — JPEG or PNG image
+## Notes
 
-**Response:**
-```json
-{
-  "aspects": [
-    {
-      "aspect": "battery",
-      "opinion": "bad",
-      "text_score": -0.5423,
-      "image_score": -0.12,
-      "fused_score": -0.4156,
-      "sentiment": "Negative"
-    }
-  ]
-}
-```
+- On Render free tier, first request after inactivity can be slow (cold start).
+- OCR quality depends on image clarity and text contrast.
+- For reproducibility, backend uses fixed ML artifacts (`model.pkl`, `vectorizer.pkl`).
 
----
+## License
 
-# Fusion Formula
-
-```
-FinalScore = 0.7 × TextScore + 0.3 × ImageScore
-
-if score >  0.2 → Positive
-if score < -0.2 → Negative
-otherwise       → Neutral
-```
-=======
-# multimodal-sentiment-ai
-A full-stack multimodal sentiment analysis system using BERT and ResNet18, featuring rule-based vs AI comparison, explainable insights, and an interactive dashboard built with React and FastAPI.
->>>>>>> 7691ed4a2a0916b4b0461d55a4370ec63179d4e4
+Add your preferred license (MIT/Apache-2.0/etc.) in a `LICENSE` file.
