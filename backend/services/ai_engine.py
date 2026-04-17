@@ -23,18 +23,22 @@ class AIEngine:
         *,
         explain: bool = False,
     ) -> AnalysisResult:
-        payload = self._predictor.predict_payload(text, image_bytes, include_saliency=explain)
+        safe_text = (text or "").strip() or "."
+        payload = self._predictor.predict_payload(safe_text, image_bytes, include_saliency=explain)
 
         if explain:
             sentiment = payload["label"]
-            explanation = build_ml_explanation(text, payload)
+            explanation = build_ml_explanation(safe_text, payload)
         else:
             sentiment = payload["label"]
             explanation = None
 
-        opinion = text.strip()
+        opinion = safe_text
         if len(opinion) > 140:
-            opinion = opinion[:140] + "…"
+            opinion = opinion[:140] + "..."
+
+        confidence_pct = round(float(payload["confidence"]) * 100.0, 2)
+        confidence_pct = min(max(confidence_pct, 0.0), 100.0)
 
         aspect = Aspect(
             aspect="overall",
@@ -42,7 +46,7 @@ class AIEngine:
             text_score=float(payload["fused_score"]),
             image_score=0.0,
             fused_score=float(payload["fused_score"]),
-            confidence=round(float(payload["confidence"]) * 100.0, 2),
+            confidence=confidence_pct,
             sentiment=sentiment,
         )
         return AnalysisResult(aspects=[aspect], explanation=explanation)

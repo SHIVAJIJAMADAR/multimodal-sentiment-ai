@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import os
-from typing import Optional
+import traceback
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse
 from PIL import Image, ImageEnhance, ImageOps
 import pytesseract
 
@@ -17,6 +18,74 @@ from deps import get_ai_engine, get_rule_engine
 from utils.multipart import read_multimodal_form
 
 router = APIRouter(tags=["analysis"])
+
+
+def _response_payload(result: AnalysisResult) -> Dict[str, Any]:
+    aspects = [aspect.model_dump() for aspect in result.aspects]
+
+    sentiment = "Neutral"
+    confidence = 0.0
+    if result.aspects:
+        first = result.aspects[0]
+        sentiment = first.sentiment
+        confidence = float((first.confidence or 0.0) / 100.0)
+
+    explanation: Any = ""
+    if result.explanation is not None:
+        if hasattr(result.explanation, "model_dump"):
+            explanation = result.explanation.model_dump()
+        else:
+            explanation = str(result.explanation)
+
+    return {
+        "sentiment": sentiment,
+        "confidence": round(min(max(confidence, 0.0), 1.0), 6),
+        "aspects": aspects,
+        "explanation": explanation,
+    }
+
+
+def _error_payload(error_message: str) -> Dict[str, Any]:
+    return {
+        "sentiment": "Neutral",
+        "confidence": 0.0,
+        "aspects": [],
+        "explanation": "",
+        "error": error_message,
+    }
+
+
+async def _read_text_inputs(
+    request: Request,
+    text: Optional[str],
+    image: Optional[UploadFile],
+    explain: Optional[bool],
+) -> tuple[str, Optional[bytes], bool]:
+    content_type = (request.headers.get("content-type") or "").lower()
+
+    if "application/json" in content_type:
+        try:
+            payload = await request.json()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
+        print("Incoming request body:", payload)
+        text_value = str(payload.get("text") or "")
+        explain_value = bool(payload.get("explain", False))
+        return text_value, None, explain_value
+
+    print(
+        "Incoming request body:",
+        {
+            "text": text,
+            "explain": explain,
+            "has_image": image is not None,
+            "image_type": image.content_type if image is not None else None,
+        },
+    )
+    text_value = text or ""
+    explain_value = bool(explain)
+    text_value, image_bytes = await read_multimodal_form(text_value, image)
+    return text_value, image_bytes, explain_value
 
 
 def _configure_tesseract_if_needed() -> None:
@@ -53,93 +122,65 @@ def extract_text_from_image(image_file):
     return text.strip()
 
 
-@router.post("/api/analyze", response_model=AnalysisResult)
+@router.post("/api/analyze", response_model=Dict[str, Any])
 async def analyze(
     request: Request,
     text: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     explain: Optional[bool] = Form(None),
     engine: RuleEngine = Depends(get_rule_engine),
-) -> AnalysisResult:
+) -> Dict[str, Any]:
     try:
-        content_type = (request.headers.get("content-type") or "").lower()
+        print("API HIT: /api/analyze")
+        text_value, image_bytes, explain_value = await _read_text_inputs(request, text, image, explain)
 
-        if "application/json" in content_type:
-            raw_body = await request.body()
-            payload = json.loads(raw_body.decode("utf-8") or "{}")
-            print("API HIT: /api/analyze")
-            print("Incoming request body:", payload)
-            text_value = str(payload.get("text") or "")
-            explain_value = bool(payload.get("explain", False))
-            image_bytes = None
-            if not text_value.strip():
-                raise HTTPException(status_code=400, detail="Text input cannot be empty")
-        else:
-            print("API HIT: /api/analyze")
-            print(
-                "Incoming request body:",
-                {
-                    "text": text,
-                    "explain": explain,
-                    "has_image": image is not None,
-                    "image_type": image.content_type if image is not None else None,
-                },
-            )
-            text_value = text or ""
-            explain_value = bool(explain)
-            text_value, image_bytes = await read_multimodal_form(text_value, image)
+        if not text_value.strip():
+            return JSONResponse(status_code=400, content=_error_payload("Text input cannot be empty"))
 
         inp = MultimodalInput(text=text_value, image_bytes=image_bytes, explain=explain_value)
-        return engine.analyze(inp)
-    except HTTPException:
-        raise
+        result = engine.analyze(inp)
+        response = _response_payload(result)
+        print("INPUT:", text_value)
+        print("OUTPUT:", response)
+        return response
+    except HTTPException as exc:
+        print("ERROR:", str(exc))
+        print(traceback.format_exc())
+        return JSONResponse(status_code=exc.status_code, content=_error_payload(str(exc.detail)))
     except Exception as exc:
-        print("Error in /api/analyze:", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        print("ERROR:", str(exc))
+        print(traceback.format_exc())
+        return JSONResponse(status_code=500, content=_error_payload(str(exc)))
 
 
-@router.post("/api/analyze-ml", response_model=AnalysisResult)
+@router.post("/api/analyze-ml", response_model=Dict[str, Any])
 async def analyze_ml(
     request: Request,
     text: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     explain: Optional[bool] = Form(None),
     engine: AIEngine = Depends(get_ai_engine),
-) -> AnalysisResult:
+) -> Dict[str, Any]:
     try:
-        content_type = (request.headers.get("content-type") or "").lower()
+        print("API HIT: /api/analyze-ml")
+        text_value, image_bytes, explain_value = await _read_text_inputs(request, text, image, explain)
 
-        if "application/json" in content_type:
-            raw_body = await request.body()
-            payload = json.loads(raw_body.decode("utf-8") or "{}")
-            print("API HIT: /api/analyze-ml")
-            print("Incoming request body:", payload)
-            text_value = str(payload.get("text") or "")
-            explain_value = bool(payload.get("explain", False))
-            image_bytes = None
-            if not text_value.strip():
-                raise HTTPException(status_code=400, detail="Text input cannot be empty")
-        else:
-            print("API HIT: /api/analyze-ml")
-            print(
-                "Incoming request body:",
-                {
-                    "text": text,
-                    "explain": explain,
-                    "has_image": image is not None,
-                    "image_type": image.content_type if image is not None else None,
-                },
-            )
-            text_value = text or ""
-            explain_value = bool(explain)
-            text_value, image_bytes = await read_multimodal_form(text_value, image)
+        if not text_value.strip():
+            return JSONResponse(status_code=400, content=_error_payload("Text input cannot be empty"))
 
-        return engine.analyze(text_value, image_bytes, explain=explain_value)
-    except HTTPException:
-        raise
+        result = engine.analyze(text_value, image_bytes, explain=explain_value)
+        response = _response_payload(result)
+        print("INPUT:", text_value)
+        print("OUTPUT:", response)
+        return response
+    except HTTPException as exc:
+        print("ERROR:", str(exc))
+        print(traceback.format_exc())
+        return JSONResponse(status_code=exc.status_code, content=_error_payload(str(exc.detail)))
     except Exception as exc:
-        print("Error in /api/analyze-ml:", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        print("ERROR:", str(exc))
+        print(traceback.format_exc())
+        return JSONResponse(status_code=500, content=_error_payload(str(exc)))
 
 
 @router.post("/api/extract-text")

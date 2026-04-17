@@ -1,7 +1,7 @@
 import os
-import pickle
 from typing import Any, Dict, List, Optional, Tuple
 
+import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 
@@ -54,23 +54,29 @@ class MLPredictor:
             self._train_and_save()
             return
 
-        if self._artifacts_exist():
-            try:
-                self._load_artifacts()
-                return
-            except Exception:
-                pass
-
-        self._train_and_save()
+        try:
+            self._load_artifacts()
+        except Exception as exc:
+            print(f"MLPredictor load failed: {exc}")
+            print("MLPredictor: retraining local fallback artifacts")
+            self._train_and_save()
 
     def _artifacts_exist(self) -> bool:
         return os.path.exists(self.model_path) and os.path.exists(self.vectorizer_path)
 
     def _load_artifacts(self) -> None:
-        with open(self.model_path, "rb") as f:
-            self.model = pickle.load(f)
-        with open(self.vectorizer_path, "rb") as f:
-            self.vectorizer = pickle.load(f)
+        if not os.path.exists(self.model_path):
+            raise FileNotFoundError(f"Model file not found: {self.model_path}")
+        if not os.path.exists(self.vectorizer_path):
+            raise FileNotFoundError(f"Vectorizer file not found: {self.vectorizer_path}")
+
+        self.model = joblib.load(self.model_path)
+        self.vectorizer = joblib.load(self.vectorizer_path)
+
+        if not hasattr(self.model, "predict"):
+            raise TypeError("Loaded model does not expose predict()")
+        if not hasattr(self.vectorizer, "transform"):
+            raise TypeError("Loaded vectorizer does not expose transform()")
 
     def _train_and_save(self) -> None:
         texts = [row[0] for row in BALANCED_DATASET]
@@ -82,10 +88,8 @@ class MLPredictor:
         self.model = LogisticRegression(max_iter=2000, class_weight="balanced", random_state=42, C=10.0)
         self.model.fit(x_train, labels)
 
-        with open(self.model_path, "wb") as f:
-            pickle.dump(self.model, f)
-        with open(self.vectorizer_path, "wb") as f:
-            pickle.dump(self.vectorizer, f)
+        joblib.dump(self.model, self.model_path)
+        joblib.dump(self.vectorizer, self.vectorizer_path)
 
     @staticmethod
     def _label_from_id(pred_id: int) -> str:
@@ -99,6 +103,12 @@ class MLPredictor:
         row = self.vectorizer.transform([text])
         if row.nnz == 0:
             return []
+
+        if not hasattr(self.model, "coef_"):
+            return []
+
+        if pred_id >= len(self.model.coef_):
+            pred_id = max(0, min(pred_id, len(self.model.coef_) - 1))
 
         coef = self.model.coef_[pred_id]
         feature_names = self.vectorizer.get_feature_names_out()
@@ -125,16 +135,33 @@ class MLPredictor:
         clean_text = (text or "").strip() or "."
         text_vec = self.vectorizer.transform([clean_text])
 
-        probs = self.model.predict_proba(text_vec)[0]
-        pred_id = int(max(range(len(probs)), key=lambda i: probs[i]))
+        raw_prediction = self.model.predict(text_vec)[0]
+        if isinstance(raw_prediction, str):
+            pred_id = LABEL_TO_ID.get(raw_prediction.capitalize(), 1)
+        else:
+            pred_id = int(raw_prediction)
 
-        probabilities = {
-            "Negative": round(float(probs[0]), 6),
-            "Neutral": round(float(probs[1]), 6),
-            "Positive": round(float(probs[2]), 6),
-        }
+        probs: Optional[List[float]] = None
+        confidence = 0.8
+        if hasattr(self.model, "predict_proba"):
+            try:
+                probs = [float(p) for p in self.model.predict_proba(text_vec)[0]]
+                confidence = float(max(probs)) if probs else 0.8
+            except Exception as exc:
+                print(f"MLPredictor predict_proba fallback triggered: {exc}")
 
-        confidence = float(max(probs))
+        probabilities = {"Negative": 0.0, "Neutral": 0.0, "Positive": 0.0}
+        if probs is not None and len(probs) == 3:
+            probabilities = {
+                "Negative": round(float(probs[0]), 6),
+                "Neutral": round(float(probs[1]), 6),
+                "Positive": round(float(probs[2]), 6),
+            }
+        else:
+            label = self._label_from_id(pred_id)
+            probabilities[label] = 1.0
+
+        confidence = min(max(confidence, 0.0), 1.0)
         fused_score = self._fused_score_from_probs(probabilities)
 
         payload: Dict[str, Any] = {
