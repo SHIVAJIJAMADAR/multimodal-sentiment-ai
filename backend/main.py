@@ -4,6 +4,8 @@ FastAPI application entrypoint — wires middleware and routers.
 
 from __future__ import annotations
 
+import shutil
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -26,3 +28,9 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(analysis_router)
 app.include_router(metrics_router)
+
+
+@app.on_event("startup")
+async def startup_diagnostics() -> None:
+    tesseract_path = shutil.which("tesseract") or "<not-found>"
+    print("Startup diagnostics: tesseract path:", tesseract_path)

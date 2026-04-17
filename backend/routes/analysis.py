@@ -119,9 +119,13 @@ def _assert_tesseract_ready() -> None:
         version = str(pytesseract.get_tesseract_version())
         print("Tesseract version:", version)
     except Exception as exc:
-        raise RuntimeError(
-            "Tesseract OCR engine is unavailable in runtime. Install system package 'tesseract-ocr' and language data 'tesseract-ocr-eng'."
-        ) from exc
+        print(f"Tesseract version check failed: {exc}")
+
+
+def _tesseract_diagnostics() -> str:
+    configured = str(getattr(pytesseract.pytesseract, "tesseract_cmd", ""))
+    discovered = shutil.which("tesseract") or "<not-found>"
+    return f"configured_cmd={configured}, which={discovered}"
 
 
 def _normalize_ocr_text(text: str) -> str:
@@ -238,7 +242,14 @@ async def extract_text(image: UploadFile = File(...)):
         print("Incoming request body:", {"filename": image.filename, "content_type": image.content_type})
         _assert_tesseract_ready()
         image_bytes = await image.read()
-        extracted = extract_text_from_image(BytesIO(image_bytes))
+        try:
+            extracted = extract_text_from_image(BytesIO(image_bytes))
+        except pytesseract.TesseractNotFoundError as exc:
+            diag = _tesseract_diagnostics()
+            raise RuntimeError(
+                "Tesseract OCR engine is unavailable in runtime. Install system package 'tesseract-ocr' and language data 'tesseract-ocr-eng'. "
+                + diag
+            ) from exc
         if not extracted:
             raise HTTPException(
                 status_code=422,
