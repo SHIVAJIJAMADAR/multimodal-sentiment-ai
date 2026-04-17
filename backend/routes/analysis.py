@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import traceback
+from io import BytesIO
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -112,22 +113,58 @@ def _configure_tesseract_if_needed() -> None:
             return
 
 
+def _assert_tesseract_ready() -> None:
+    _configure_tesseract_if_needed()
+    try:
+        version = str(pytesseract.get_tesseract_version())
+        print("Tesseract version:", version)
+    except Exception as exc:
+        raise RuntimeError(
+            "Tesseract OCR engine is unavailable in runtime. Install system package 'tesseract-ocr' and language data 'tesseract-ocr-eng'."
+        ) from exc
+
+
+def _normalize_ocr_text(text: str) -> str:
+    return " ".join((text or "").split())
+
+
 def extract_text_from_image(image_file):
     _configure_tesseract_if_needed()
     image = Image.open(image_file).convert("RGB")
+
+    width, height = image.size
+    scale = 2 if max(width, height) < 1800 else 1
+    if scale > 1:
+        image = image.resize((width * scale, height * scale), Image.Resampling.LANCZOS)
+
     gray = ImageOps.grayscale(image)
-    boosted = ImageEnhance.Contrast(gray).enhance(2.0)
-    bw = boosted.point(lambda p: 255 if p > 160 else 0)
-    text = pytesseract.image_to_string(
-        bw,
-        config="--oem 3 --psm 6",
-    )
-    if not text.strip():
-        text = pytesseract.image_to_string(
-            gray,
-            config="--oem 3 --psm 6",
-        )
-    return text.strip()
+    auto = ImageOps.autocontrast(gray)
+    boosted = ImageEnhance.Contrast(auto).enhance(2.2)
+    bw = boosted.point(lambda p: 255 if p > 170 else 0)
+    inv_bw = ImageOps.invert(bw)
+
+    variants = [image, gray, auto, boosted, bw, inv_bw]
+    configs = [
+        "--oem 3 --psm 6 -l eng",
+        "--oem 3 --psm 7 -l eng",
+        "--oem 3 --psm 11 -l eng",
+    ]
+
+    best_text = ""
+    best_score = -1
+    for variant in variants:
+        for cfg in configs:
+            try:
+                raw = pytesseract.image_to_string(variant, config=cfg)
+            except Exception:
+                continue
+            normalized = _normalize_ocr_text(raw)
+            score = sum(ch.isalnum() for ch in normalized)
+            if score > best_score:
+                best_score = score
+                best_text = normalized
+
+    return best_text
 
 
 @router.post("/api/analyze", response_model=Dict[str, Any])
@@ -199,8 +236,18 @@ async def extract_text(image: UploadFile = File(...)):
 
         print("API HIT: /api/extract-text")
         print("Incoming request body:", {"filename": image.filename, "content_type": image.content_type})
-        extracted = extract_text_from_image(image.file)
+        _assert_tesseract_ready()
+        image_bytes = await image.read()
+        extracted = extract_text_from_image(BytesIO(image_bytes))
+        if not extracted:
+            raise HTTPException(
+                status_code=422,
+                detail="OCR could not read text from image. Upload a clearer image with higher contrast or type manually.",
+            )
         return {"extracted_text": extracted}
+    except RuntimeError as exc:
+        print("Error in /api/extract-text:", exc)
+        raise HTTPException(status_code=503, detail=str(exc))
     except HTTPException:
         raise
     except Exception as exc:
