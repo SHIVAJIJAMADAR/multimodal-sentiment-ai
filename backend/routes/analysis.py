@@ -119,7 +119,11 @@ def _assert_tesseract_ready() -> None:
         version = str(pytesseract.get_tesseract_version())
         print("Tesseract version:", version)
     except Exception as exc:
-        print(f"Tesseract version check failed: {exc}")
+        diag = _tesseract_diagnostics()
+        raise RuntimeError(
+            "Tesseract OCR engine is unavailable in runtime. Install system package 'tesseract-ocr' and language data 'tesseract-ocr-eng'. "
+            + diag
+        ) from exc
 
 
 def _tesseract_diagnostics() -> str:
@@ -156,10 +160,14 @@ def extract_text_from_image(image_file):
 
     best_text = ""
     best_score = -1
+    executed_any_ocr = False
     for variant in variants:
         for cfg in configs:
             try:
                 raw = pytesseract.image_to_string(variant, config=cfg)
+                executed_any_ocr = True
+            except pytesseract.TesseractNotFoundError:
+                raise
             except Exception:
                 continue
             normalized = _normalize_ocr_text(raw)
@@ -167,6 +175,9 @@ def extract_text_from_image(image_file):
             if score > best_score:
                 best_score = score
                 best_text = normalized
+
+    if not executed_any_ocr:
+        raise RuntimeError("OCR pipeline did not execute any successful tesseract call")
 
     return best_text
 
