@@ -8,10 +8,9 @@ from __future__ import annotations
 import re
 import logging
 
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
-
 from models import AnalysisResult, MultimodalInput, Aspect
 from linguistic import LinguisticAnalyzer
+from utils.nltk_setup import get_vader_analyzer
 from vision import VisualAnalyzer
 
 from .fusion_engine import FusionEngine
@@ -40,7 +39,7 @@ def compute_rule_sentiment(text: str) -> dict:
     # Debug: print when function is used
     print("RULE ENGINE USED")
     
-    vader = SentimentIntensityAnalyzer()
+    vader = get_vader_analyzer()
     
     # Split sentences
     sentences = re.split(r'[.!?]+', text)
@@ -122,7 +121,7 @@ class RuleEngine:
 
     def __init__(self) -> None:
         self._linguistic = None
-        self._vader = SentimentIntensityAnalyzer()
+        self._vader = get_vader_analyzer()
         try:
             self._linguistic = LinguisticAnalyzer()
             self._vader = self._linguistic.vader

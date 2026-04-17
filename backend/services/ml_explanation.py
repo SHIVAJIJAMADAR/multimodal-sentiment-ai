@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
-
 from models import AnalysisExplanation, TextSegment, WordSaliency
+from utils.nltk_setup import get_vader_analyzer
 from utils.vader_highlights import document_vader_compound, lexicon_word_segments
 
 
 def build_ml_explanation(text: str, explain_payload: Dict[str, Any]) -> AnalysisExplanation:
-    sia = SentimentIntensityAnalyzer()
+    sia = get_vader_analyzer()
     segments = [TextSegment(**s) for s in lexicon_word_segments(text, sia)]
     compound = document_vader_compound(text, sia)
 

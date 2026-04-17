@@ -11,12 +11,12 @@ Designed for lightweight CPU environments and deterministic outputs.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
+from typing import Any, List
 
 import spacy
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
 from models import Aspect
+from utils.nltk_setup import get_vader_analyzer
 
 
 # ---------------------------------------------------------------------
@@ -55,10 +55,10 @@ class LinguisticAnalyzer:
                 "spaCy model not found. Run: python -m spacy download en_core_web_sm"
             )
 
-        self._vader = SentimentIntensityAnalyzer()
+        self._vader = get_vader_analyzer()
 
     @property
-    def vader(self) -> SentimentIntensityAnalyzer:
+    def vader(self) -> Any:
         return self._vader
 
     # ------------------------------------------------------------------

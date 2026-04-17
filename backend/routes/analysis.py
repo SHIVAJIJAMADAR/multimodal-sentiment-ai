@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import traceback
 from typing import Any, Dict, Optional
 
@@ -94,7 +95,14 @@ def _configure_tesseract_if_needed() -> None:
         if isinstance(cmd, str) and os.path.exists(cmd):
             return
 
+    discovered = shutil.which("tesseract")
+    if discovered:
+        pytesseract.pytesseract.tesseract_cmd = discovered
+        return
+
     candidates = [
+        "/usr/bin/tesseract",
+        "/usr/local/bin/tesseract",
         r"C:\Program Files\Tesseract-OCR\tesseract.exe",
         r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
     ]
